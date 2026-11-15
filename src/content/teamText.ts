@@ -67,10 +67,29 @@ export const TEAM_ELEMENT_TEXT: Record<Element, { rich: string; lack: string }> 
   },
 }
 
+const roleName = (team: TeamResult, member: number): RoleGroup =>
+  (Object.keys(team.roles) as RoleGroup[]).find((r) => team.roles[r].includes(member))!
+
 /** 配置の提案を文章にする */
 export function teamSuggestions(team: TeamResult, names: string[]): string[] {
   const lines: string[] = []
   const best = team.bestPair
+  if (team.size === 2) {
+    // 2人のときは「つなぎ役」「間に入る人」が成り立たないので、2人の関係だけを述べる
+    lines.push(
+      `${names[0]}さんと${names[1]}さんの相性は、仕事 ${best.work}点、プライベート ${best.private}点です。噛み合う点と揉めやすい点は、相性マトリクスのマスを押すと詳しく見られます。`,
+    )
+    if (team.cautionPair) {
+      lines.push('進め方がぶつかりやすい組み合わせです。役割と決め方を先に言葉にしておくと、違いを補い合う関係にしやすくなります。')
+    }
+    const shared = (Object.keys(team.roles) as RoleGroup[]).find((r) => team.roles[r].length === 2)
+    lines.push(
+      shared
+        ? `2人とも${ROLE_TEXT[shared].label}のタイプです。得意が重なるぶん、担当範囲を分けておくとよさそうです。`
+        : `${names[0]}さんは${ROLE_TEXT[roleName(team, 0)].label}、${names[1]}さんは${ROLE_TEXT[roleName(team, 1)].label}のタイプです。それぞれの得意を活かして分担すると進めやすいようです。`,
+    )
+    return lines
+  }
   lines.push(
     `${names[team.hub]}さんは、他のメンバーとの仕事の相性の平均が最も高く（${team.memberAverage[team.hub]}点）、人と人をつなぐ位置に置くと全体が回りやすい傾向があります。`,
   )

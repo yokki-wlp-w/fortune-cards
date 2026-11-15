@@ -297,8 +297,16 @@ describe('チーム分析', () => {
       expect(team.mediator).toBeUndefined()
     }
   })
-  it('2人以下はエラー', () => {
-    expect(() => computeTeam(dates.slice(0, 2).map((d) => computeChart(d)))).toThrow()
+  it('2人でも分析でき、間に入る人は出さない', () => {
+    const duo = computeTeam(dates.slice(0, 2).map((d) => computeChart(d)))
+    expect(duo.size).toBe(2)
+    expect(duo.pairs).toHaveLength(1)
+    expect(duo.mediator).toBeUndefined()
+    expect(duo.average.work).toBe(duo.bestPair.work)
+    expect(ROLE_GROUPS.flatMap((r) => duo.roles[r]).sort()).toEqual([0, 1])
+  })
+  it('1人はエラー', () => {
+    expect(() => computeTeam([computeChart(dates[0])])).toThrow()
   })
 })
 

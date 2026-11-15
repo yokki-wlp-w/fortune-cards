@@ -1,9 +1,9 @@
-// チーム分析（3人以上）：相性マトリクス、五行と役割の偏り、不足要素、配置の提案のもとになる数値を出す。
+// チーム分析（2人以上）：相性マトリクス、五行と役割の偏り、不足要素、配置の提案のもとになる数値を出す。
 // 文章は持たない。
 import { ELEMENTS, type Element } from './tables'
 import type { ChartCore } from './chart'
 import { computeCompat } from './compat'
-import { TEAM_CAUTION_SCORE, TEAM_ELEMENT_LACK, TEAM_ELEMENT_RICH } from './config'
+import { TEAM_CAUTION_SCORE, TEAM_ELEMENT_LACK, TEAM_ELEMENT_RICH, TEAM_MIN_SIZE } from './config'
 
 /** 月柱の通変星を5グループにまとめた、仕事上の役割タイプ */
 export type RoleGroup = 'hikaku' | 'shokusho' | 'zai' | 'kan' | 'in'
@@ -59,7 +59,7 @@ const round1 = (n: number) => Math.round(n * 10) / 10
 
 export function computeTeam(charts: ChartCore[]): TeamResult {
   const n = charts.length
-  if (n < 3) throw new Error('チーム分析には3人以上が必要です')
+  if (n < TEAM_MIN_SIZE) throw new Error(`チーム分析には${TEAM_MIN_SIZE}人以上が必要です`)
 
   const matrix: TeamResult['matrix'] = charts.map(() => charts.map(() => null))
   const pairs: TeamPair[] = []

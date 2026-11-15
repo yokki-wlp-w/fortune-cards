@@ -44,6 +44,8 @@ export const FACTOR_POINTS: Record<string, { work: number; private: number }> = 
 
 // ---------- チーム分析 ----------
 
+/** チーム分析ができる最少人数 */
+export const TEAM_MIN_SIZE = 2
 /** チームの五行（1人あたりの平均。偏りがなければ各 1.2）で「不足」「多い」とみなす境目 */
 export const TEAM_ELEMENT_LACK = 0.7
 export const TEAM_ELEMENT_RICH = 1.8

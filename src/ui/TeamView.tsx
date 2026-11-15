@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ROLE_GROUPS, computeTeam } from '../engine'
+import { ROLE_GROUPS, TEAM_MIN_SIZE, computeTeam } from '../engine'
 import { ANIMAL_TEXT, ROLE_TEXT, TEAM_ELEMENT_TEXT, teamSuggestions } from '../content'
 import type { CardRecord } from '../db/db'
 import { ElementChart } from './ElementChart'
@@ -19,7 +19,7 @@ function Member({ card }: { card: CardRecord }) {
   )
 }
 
-/** チーム分析：3人以上を選んで、相性マトリクス・五行と役割の偏り・不足要素・配置の提案を見る */
+/** チーム分析：2人以上を選んで、相性マトリクス・五行と役割の偏り・不足要素・配置の提案を見る */
 export function TeamView({ ids }: { ids: string[] }) {
   const cards = useCards()
   const [mode, setMode] = useState<'work' | 'private'>('work')
@@ -28,15 +28,18 @@ export function TeamView({ ids }: { ids: string[] }) {
     () => ids.map((id) => cards?.find((c) => c.id === id)).filter((c): c is CardRecord => !!c),
     [cards, ids],
   )
-  const team = useMemo(() => (members.length >= 3 ? computeTeam(members.map((m) => m.derived)) : null), [members])
+  const team = useMemo(
+    () => (members.length >= TEAM_MIN_SIZE ? computeTeam(members.map((m) => m.derived)) : null),
+    [members],
+  )
 
   if (!cards) return <p className="py-10 text-center text-slate-500">読み込み中…</p>
   const setIds = (next: string[]) => navigate(`/team?ids=${next.join(',')}`)
 
-  if (cards.length < 3) {
+  if (cards.length < TEAM_MIN_SIZE) {
     return (
       <div className="rounded-2xl bg-white p-8 text-center shadow-sm ring-1 ring-slate-200">
-        <p className="font-bold">チーム分析には、カードが3枚以上必要です</p>
+        <p className="font-bold">チーム分析には、カードが{TEAM_MIN_SIZE}枚以上必要です</p>
         <Button variant="primary" className="mt-4" onClick={() => navigate('/')}>
           カードを追加する
         </Button>
@@ -49,12 +52,12 @@ export function TeamView({ ids }: { ids: string[] }) {
 
   return (
     <div className="space-y-4">
-      <Panel title="チーム分析（3人以上を選ぶ）">
+      <Panel title={`チーム分析（${TEAM_MIN_SIZE}人以上を選ぶ）`}>
         <MemberPicker cards={cards} selected={members.map((m) => m.id)} onChange={setIds} />
       </Panel>
 
       {!team ? (
-        <p className="py-6 text-center text-sm text-slate-500">メンバーを3人以上選ぶと、分析が表示されます。</p>
+        <p className="py-6 text-center text-sm text-slate-500">メンバーを{TEAM_MIN_SIZE}人以上選ぶと、分析が表示されます。</p>
       ) : (
         <>
           <Panel
