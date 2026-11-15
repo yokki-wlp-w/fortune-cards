@@ -3,6 +3,8 @@ import { SYSTEM_WEIGHTS, computeCompat } from '../engine'
 import { ANIMAL_TEXT, SYSTEM_LABEL, animalPairNote, describeFactor, kuubouNote, scoreLabel, type CompatLine } from '../content'
 import { pairId, type CardRecord, type FeedbackRecord } from '../db/db'
 import { CardFace } from './CardFace'
+import { RecordCaseButton } from './CaseList'
+import { ViewLogList, useRecordView } from './ViewLogList'
 import { FeedbackControl } from './FeedbackControl'
 import { Button, Notice, Panel, SystemChip } from './common'
 import { navigate, useCards, useFeedbackMap } from './hooks'
@@ -75,6 +77,9 @@ export function CompatView({ a, b }: { a: string; b: string }) {
     const lines = r.factors.map((f) => describeFactor(f, [cardA.name, cardB.name]))
     return { r, lines }
   }, [cardA, cardB])
+
+  // 結果が表示されたら、計測ログに自動で記録する
+  useRecordView('pair', [cardA?.id ?? '', cardB?.id ?? ''], !!result)
 
   if (!cards) return <p className="py-10 text-center text-slate-500">読み込み中…</p>
   const set = (na: string, nb: string) => navigate(`/compat?a=${na}&b=${nb}`)
@@ -153,6 +158,8 @@ export function CompatView({ a, b }: { a: string; b: string }) {
             )}
           </Panel>
 
+          <RecordCaseButton kind="pair" members={[cardA, cardB]} className="w-full" />
+
           <Panel title="噛み合う点">
             <Lines lines={good} targetId={targetId} feedback={feedback} />
           </Panel>
@@ -185,6 +192,8 @@ export function CompatView({ a, b }: { a: string; b: string }) {
           <Notice>相性は「良い・悪い」を決めるものではなく、関わり方を考えるための手がかりです。</Notice>
         </>
       )}
+
+      <ViewLogList kind="pair" cards={cards} />
     </div>
   )
 }

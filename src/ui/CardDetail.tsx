@@ -14,6 +14,7 @@ import { FacesDiagram } from './FacesDiagram'
 import { deleteCard, type CardRecord, type FeedbackRecord } from '../db/db'
 import { CardFace } from './CardFace'
 import { CardForm } from './CardForm'
+import { RecordCaseButton } from './CaseList'
 import { ElementChart } from './ElementChart'
 import { FeedbackControl } from './FeedbackControl'
 import { Button, Notice, Panel, SystemChip, formatDate } from './common'
@@ -175,6 +176,7 @@ export function CardDetail({ id }: { id: string }) {
             <Button className="col-span-2" onClick={() => navigate(`/yearly?ids=${card.id}`)}>
               年運を見る
             </Button>
+            <RecordCaseButton kind="person" members={[card]} className="col-span-2" />
             <Button onClick={() => setEditing(true)}>編集</Button>
             <Button variant="danger" onClick={remove}>
               削除

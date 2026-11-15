@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { SYSTEM_IDS, SYSTEM_LABEL, type SystemId } from '../content'
 import { db } from '../db/db'
+import { RecordsTabs } from './CaseList'
 import { Notice, Panel, formatDateTime } from './common'
 import { navigate } from './hooks'
 
@@ -40,6 +41,7 @@ export function StatsView() {
 
   return (
     <div className="space-y-4">
+      <RecordsTabs active="stats" />
       <Panel title="占術別の的中率">
         {data.feedback.length === 0 ? (
           <p className="text-sm leading-relaxed text-slate-600">

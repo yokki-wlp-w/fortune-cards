@@ -2,7 +2,7 @@
 // 「同期ファイルを読む → 端末内データと統合 → 書き戻す」を1回の操作で行う。サーバーや外部 API は使わない。
 import { ENGINE_VERSION, computeChart } from '../engine'
 import { SYSTEM_IDS } from '../content'
-import { db, getMeta, setMeta, type CardRecord, type FeedbackRecord } from '../db/db'
+import { db, getMeta, setMeta, type CardRecord, type CaseRecord, type FeedbackRecord, type ViewLogRecord } from '../db/db'
 import { mergeRecords } from './merge'
 import { decryptEnvelope, encryptText, isEncrypted } from './crypto'
 
@@ -19,6 +19,9 @@ export interface Snapshot {
   exportedAt: number
   cards: CardRecord[]
   feedback: FeedbackRecord[]
+  /** 計測ログ・ケーススタディ（古い版で作ったファイルには無いので、読み込み時は空として扱う） */
+  logs: ViewLogRecord[]
+  cases: CaseRecord[]
 }
 
 export interface SyncStats {
@@ -41,6 +44,8 @@ export async function buildSnapshot(): Promise<Snapshot> {
     exportedAt: Date.now(),
     cards: await db.cards.toArray(),
     feedback: await db.feedback.toArray(),
+    logs: await db.logs.toArray(),
+    cases: await db.cases.toArray(),
   }
 }
 
@@ -94,6 +99,49 @@ function sanitizeFeedback(raw: unknown): FeedbackRecord | null {
   }
 }
 
+const strList = (v: unknown, maxLen: number, maxItems: number): string[] =>
+  Array.isArray(v) ? v.filter(isStr).slice(0, maxItems).map((s) => s.slice(0, maxLen)) : []
+
+function sanitizeLog(raw: unknown): ViewLogRecord | null {
+  const r = raw as Partial<ViewLogRecord>
+  if (!r || !isStr(r.id) || !isNum(r.updatedAt)) return null
+  if (r.kind !== 'pair' && r.kind !== 'team') return null
+  const memberIds = strList(r.memberIds, 100, 200)
+  if (memberIds.length < 2) return null
+  return {
+    id: r.id,
+    kind: r.kind,
+    memberIds,
+    viewedAt: isNum(r.viewedAt) ? r.viewedAt : r.updatedAt,
+    updatedAt: r.updatedAt,
+    deletedAt: isNum(r.deletedAt) ? r.deletedAt : undefined,
+  }
+}
+
+function sanitizeCase(raw: unknown): CaseRecord | null {
+  const r = raw as Partial<CaseRecord>
+  if (!r || !isStr(r.id) || !isNum(r.updatedAt) || !isStr(r.title)) return null
+  if (r.kind !== 'person' && r.kind !== 'pair' && r.kind !== 'team') return null
+  const long = (v: unknown) => (isStr(v) ? v.slice(0, 5000) : '')
+  return {
+    id: r.id,
+    title: r.title.slice(0, 200),
+    date: isStr(r.date) && /^\d{4}-\d{2}-\d{2}$/.test(r.date) ? r.date : new Date(r.updatedAt).toISOString().slice(0, 10),
+    kind: r.kind,
+    memberIds: strList(r.memberIds, 100, 200),
+    scene: long(r.scene),
+    reading: long(r.reading),
+    outcome: long(r.outcome),
+    learning: long(r.learning),
+    usefulness: r.usefulness === 'useful' || r.usefulness === 'partial' || r.usefulness === 'notUseful' ? r.usefulness : undefined,
+    tags: strList(r.tags, 30, 30),
+    snapshot: strList(r.snapshot, 500, 50),
+    createdAt: isNum(r.createdAt) ? r.createdAt : r.updatedAt,
+    updatedAt: r.updatedAt,
+    deletedAt: isNum(r.deletedAt) ? r.deletedAt : undefined,
+  }
+}
+
 /** ファイルの中身を読み取る。空なら null（新規の同期ファイル） */
 export async function parse(text: string, passphrase?: string): Promise<Snapshot | null> {
   if (!text.trim()) return null
@@ -118,19 +166,25 @@ export async function parse(text: string, passphrase?: string): Promise<Snapshot
     exportedAt: isNum(p.exportedAt) ? p.exportedAt : 0,
     cards: p.cards.map(sanitizeCard).filter((c): c is CardRecord => c !== null),
     feedback: p.feedback.map(sanitizeFeedback).filter((f): f is FeedbackRecord => f !== null),
+    logs: (Array.isArray(p.logs) ? p.logs : []).map(sanitizeLog).filter((l): l is ViewLogRecord => l !== null),
+    cases: (Array.isArray(p.cases) ? p.cases : []).map(sanitizeCase).filter((c): c is CaseRecord => c !== null),
   }
 }
 
 /** 読み込んだデータを端末内のデータに統合する */
 export async function applySnapshot(remote: Snapshot | null): Promise<SyncStats> {
-  return db.transaction('rw', db.cards, db.feedback, async () => {
+  return db.transaction('rw', db.cards, db.feedback, db.logs, db.cases, async () => {
     const cards = mergeRecords(await db.cards.toArray(), remote?.cards ?? [])
     const feedback = mergeRecords(await db.feedback.toArray(), remote?.feedback ?? [])
+    const logs = mergeRecords(await db.logs.toArray(), remote?.logs ?? [])
+    const cases = mergeRecords(await db.cases.toArray(), remote?.cases ?? [])
     await db.cards.bulkPut(cards.merged)
     await db.feedback.bulkPut(feedback.merged)
+    await db.logs.bulkPut(logs.merged)
+    await db.cases.bulkPut(cases.merged)
     return {
-      incoming: cards.incoming + feedback.incoming,
-      outgoing: cards.outgoing + feedback.outgoing,
+      incoming: cards.incoming + feedback.incoming + logs.incoming + cases.incoming,
+      outgoing: cards.outgoing + feedback.outgoing + logs.outgoing + cases.outgoing,
       cards: cards.merged.filter((c) => !c.deletedAt).length,
     }
   })

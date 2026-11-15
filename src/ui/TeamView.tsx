@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react'
 import { ROLE_GROUPS, TEAM_MIN_SIZE, computeTeam } from '../engine'
 import { ANIMAL_TEXT, ROLE_TEXT, TEAM_ELEMENT_TEXT, teamSuggestions } from '../content'
 import type { CardRecord } from '../db/db'
+import { RecordCaseButton } from './CaseList'
 import { ElementChart } from './ElementChart'
+import { ViewLogList, useRecordView } from './ViewLogList'
 import { MemberPicker } from './MemberPicker'
 import { Button, Notice, Panel } from './common'
 import { navigate, useCards } from './hooks'
@@ -32,6 +34,9 @@ export function TeamView({ ids }: { ids: string[] }) {
     () => (members.length >= TEAM_MIN_SIZE ? computeTeam(members.map((m) => m.derived)) : null),
     [members],
   )
+
+  // 分析が表示されたら、計測ログに自動で記録する
+  useRecordView('team', members.map((m) => m.id), !!team)
 
   if (!cards) return <p className="py-10 text-center text-slate-500">読み込み中…</p>
   const setIds = (next: string[]) => navigate(`/team?ids=${next.join(',')}`)
@@ -143,6 +148,8 @@ export function TeamView({ ids }: { ids: string[] }) {
             {hasBoundary && <p className="mt-2 text-xs text-amber-800">境界日生まれのメンバーは、節入り後の候補で計算しています。</p>}
           </Panel>
 
+          <RecordCaseButton kind="team" members={members} className="w-full" />
+
           <Panel title="五行の偏り（1人あたりの平均）">
             <ElementChart elements={team.elements} />
             <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-slate-800">
@@ -205,6 +212,8 @@ export function TeamView({ ids }: { ids: string[] }) {
           <Notice>配置の提案は、関わり方を考えるための手がかりです。実際の経験・スキル・本人の希望を優先してください。</Notice>
         </>
       )}
+
+      <ViewLogList kind="team" cards={cards} />
     </div>
   )
 }

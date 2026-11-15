@@ -1,7 +1,7 @@
 // カード一覧と相性結果を .xlsx に出力する。ファイルは端末内で作り、外部には送らない。
 import { ELEMENTS, KYUSEI_NAMES, animalFaces, computeCompat } from '../engine'
-import { NOTICE_ANIMAL, NOTICE_CONSENT, NOTICE_REFERENCE, describeFactor } from '../content'
-import type { CardRecord } from '../db/db'
+import { CASE_KIND_LABEL, NOTICE_ANIMAL, NOTICE_CONSENT, NOTICE_REFERENCE, USEFULNESS_LABEL, describeFactor } from '../content'
+import type { CardRecord, CaseRecord } from '../db/db'
 
 type Cell = { value: string | number; fontWeight?: 'bold' } | null
 export interface SheetSpec {
@@ -15,8 +15,8 @@ const header = (labels: string[]): Cell[] => labels.map((value) => ({ value, fon
 const text = (value: string): Cell => (value === '' ? null : { value })
 const num = (value: number): Cell => ({ value })
 
-/** 出力する3つのシート（カード一覧・相性一覧・注意書き）の中身を作る */
-export function buildSheets(cards: CardRecord[]): SheetSpec[] {
+/** 出力するシート（カード一覧・相性一覧・ケース一覧・注意書き）の中身を作る */
+export function buildSheets(cards: CardRecord[], cases: CaseRecord[] = []): SheetSpec[] {
   const cardHead = [
     '名前', '生年月日', 'タグ', '年柱', '月柱', '日柱', '日干',
     ...ELEMENTS.map((e) => `五行:${e}`),
@@ -55,6 +55,15 @@ export function buildSheets(cards: CardRecord[]): SheetSpec[] {
     }
   }
 
+  const nameOf = new Map(cards.map((c) => [c.id, c.name]))
+  const caseHead = ['日付', 'タイトル', '対象', 'メンバー', '場面', '分析から読み取ったこと', '実際に起きたこと', '学び・次に活かすこと', '役立ち度', 'タグ', '記録時点の分析結果']
+  const caseRows = cases.map((c): Cell[] => [
+    text(c.date), text(c.title), text(CASE_KIND_LABEL[c.kind]),
+    text(c.memberIds.map((id) => nameOf.get(id) ?? '（削除済み）').join('、')),
+    text(c.scene), text(c.reading), text(c.outcome), text(c.learning),
+    text(c.usefulness ? USEFULNESS_LABEL[c.usefulness] : '未評価'), text(c.tags.join('、')), text(c.snapshot.join('\n')),
+  ])
+
   const notes = [NOTICE_REFERENCE, NOTICE_CONSENT, NOTICE_ANIMAL, '境界日のカードは、節入り後の候補で算出しています。', `出力日時：${new Date().toLocaleString('ja-JP')}`]
 
   return [
@@ -70,13 +79,19 @@ export function buildSheets(cards: CardRecord[]): SheetSpec[] {
       columns: pairHead.map((h) => ({ width: h.includes('点') ? 50 : 14 })),
       stickyRowsCount: 1,
     },
+    {
+      sheet: 'ケース一覧',
+      data: [header(caseHead), ...caseRows],
+      columns: caseHead.map((h, i) => ({ width: i >= 4 && i <= 7 ? 40 : h === '記録時点の分析結果' ? 60 : 14 })),
+      stickyRowsCount: 1,
+    },
     { sheet: '注意書き', data: notes.map((n) => [text(n)]), columns: [{ width: 100 }] },
   ]
 }
 
 /** .xlsx ファイルを作る（ライブラリは必要になったときだけ読み込む） */
-export async function buildExcelFile(cards: CardRecord[], fileName: string): Promise<File> {
+export async function buildExcelFile(cards: CardRecord[], cases: CaseRecord[], fileName: string): Promise<File> {
   const { default: writeExcelFile } = await import('write-excel-file/browser')
-  const blob = await writeExcelFile(buildSheets(cards)).toBlob()
+  const blob = await writeExcelFile(buildSheets(cards, cases)).toBlob()
   return new File([blob], fileName, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
 }

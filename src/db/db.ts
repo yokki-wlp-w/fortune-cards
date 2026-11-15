@@ -36,6 +36,40 @@ export interface FeedbackRecord extends Syncable {
   note?: string
 }
 
+/** 計測ログ：相性・チームの分析を「誰について、いつ見たか」。同じ組み合わせは1行にまとめる */
+export interface ViewLogRecord extends Syncable {
+  kind: 'pair' | 'team'
+  /** カードID（並び順をそろえたもの） */
+  memberIds: string[]
+  /** 最後に見た日時 */
+  viewedAt: number
+}
+
+export type CaseKind = 'person' | 'pair' | 'team'
+export type Usefulness = 'useful' | 'partial' | 'notUseful'
+
+/** ケーススタディ：ある場面で分析を使い、実際にどうなったかの記録 */
+export interface CaseRecord extends Syncable {
+  title: string
+  /** 実施日 "YYYY-MM-DD" */
+  date: string
+  kind: CaseKind
+  memberIds: string[]
+  /** どんな状況だったか */
+  scene: string
+  /** 分析から読み取ったこと（事前の見立て） */
+  reading: string
+  /** 実際に起きたこと */
+  outcome: string
+  /** 学び・次に活かすこと */
+  learning: string
+  usefulness?: Usefulness
+  tags: string[]
+  /** 記録した時点の分析結果の控え（点数など）。後から配点が変わっても当時の内容が残る */
+  snapshot: string[]
+  createdAt: number
+}
+
 export interface MetaRecord {
   key: string
   value: unknown
@@ -44,6 +78,8 @@ export interface MetaRecord {
 class AppDB extends Dexie {
   cards!: Table<CardRecord, string>
   feedback!: Table<FeedbackRecord, string>
+  logs!: Table<ViewLogRecord, string>
+  cases!: Table<CaseRecord, string>
   meta!: Table<MetaRecord, string>
   constructor() {
     super('fortune-cards')
@@ -51,6 +87,10 @@ class AppDB extends Dexie {
       cards: 'id, updatedAt',
       feedback: 'id, targetId, updatedAt',
       meta: 'key',
+    })
+    this.version(2).stores({
+      logs: 'id, kind, updatedAt',
+      cases: 'id, updatedAt',
     })
   }
 }
@@ -90,14 +130,70 @@ export async function saveCard(input: CardInput): Promise<string> {
 /** 論理削除（同期先にも削除を伝えるため、レコード自体は残す） */
 export async function deleteCard(id: string): Promise<void> {
   const now = Date.now()
-  await db.transaction('rw', db.cards, db.feedback, async () => {
+  await db.transaction('rw', db.cards, db.feedback, db.logs, async () => {
     const card = await db.cards.get(id)
     if (!card) return
     // 名前・メモ・タグは削除時に消しておく
     await db.cards.put({ ...card, name: '', memo: undefined, tags: [], updatedAt: now, deletedAt: now })
     const related = await db.feedback.filter((f) => f.targetId.split('|').includes(id)).toArray()
     await db.feedback.bulkPut(related.map((f) => ({ ...f, note: undefined, updatedAt: now, deletedAt: now })))
+    const logs = await db.logs.filter((l) => !l.deletedAt && l.memberIds.includes(id)).toArray()
+    await db.logs.bulkPut(logs.map((l) => ({ ...l, updatedAt: now, deletedAt: now })))
+    // ケーススタディは利用者が書いた記録なので残す（一覧では「削除済み」と表示する）
   })
+}
+
+// ---------- 計測ログ ----------
+
+export const viewLogId = (kind: 'pair' | 'team', memberIds: string[]): string => `${kind}:${[...memberIds].sort().join('|')}`
+
+/** 分析を見たことを記録する。同じ組み合わせは1行にまとめ、最後に見た日時を更新する */
+export async function recordView(kind: 'pair' | 'team', memberIds: string[]): Promise<void> {
+  const ids = [...new Set(memberIds)].sort()
+  if (ids.length < 2) return
+  const now = Date.now()
+  await db.logs.put({ id: viewLogId(kind, ids), kind, memberIds: ids, viewedAt: now, updatedAt: now })
+}
+
+export async function deleteViewLog(id: string): Promise<void> {
+  const cur = await db.logs.get(id)
+  const now = Date.now()
+  if (cur) await db.logs.put({ ...cur, updatedAt: now, deletedAt: now })
+}
+
+// ---------- ケーススタディ ----------
+
+export type CaseInput = Omit<CaseRecord, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'> & { id?: string }
+
+export async function saveCase(input: CaseInput): Promise<string> {
+  const now = Date.now()
+  const existing = input.id ? await db.cases.get(input.id) : undefined
+  const id = existing?.id ?? crypto.randomUUID()
+  await db.cases.put({
+    id,
+    title: input.title.trim(),
+    date: input.date,
+    kind: input.kind,
+    memberIds: input.memberIds,
+    scene: input.scene.trim(),
+    reading: input.reading.trim(),
+    outcome: input.outcome.trim(),
+    learning: input.learning.trim(),
+    usefulness: input.usefulness,
+    tags: [...new Set(input.tags.map((t) => t.trim()).filter(Boolean))],
+    snapshot: input.snapshot,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+  })
+  return id
+}
+
+export async function deleteCase(id: string): Promise<void> {
+  const cur = await db.cases.get(id)
+  const now = Date.now()
+  if (!cur) return
+  // 書いた内容は削除時に消しておく
+  await db.cases.put({ ...cur, title: '', scene: '', reading: '', outcome: '', learning: '', tags: [], snapshot: [], updatedAt: now, deletedAt: now })
 }
 
 export async function setFeedback(

@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { db, deleteCard, saveCard, setFeedback, setMeta } from '../db/db'
+import { db, deleteCard, deleteCase, deleteViewLog, recordView, saveCard, saveCase, setFeedback, setMeta, viewLogId } from '../db/db'
 import { mergeRecords } from './merge'
 import { decryptEnvelope, encryptText, isEncrypted, normalizePassphrase, passphraseCode, WrongPassphraseError } from './crypto'
 import { applySnapshot, buildSnapshot, META_PASSPHRASE, parse, PassphraseRequiredError, serialize } from './sync'
@@ -55,6 +55,8 @@ describe('同期の往復', () => {
   beforeEach(async () => {
     await db.cards.clear()
     await db.feedback.clear()
+    await db.logs.clear()
+    await db.cases.clear()
     await db.meta.clear()
   })
 
@@ -110,6 +112,55 @@ describe('同期の往復', () => {
     expect(snap?.cards[0].derived.animal).not.toBe('改ざん')
     expect(snap?.feedback).toHaveLength(0)
     expect(await parse('')).toBeNull()
+  })
+
+  it('計測ログは同じ組み合わせを1行にまとめ、ケースと一緒に同期される', async () => {
+    const a = await saveCard({ name: 'A', birthDate: '1990-05-15', tags: [] })
+    const b = await saveCard({ name: 'B', birthDate: '1988-12-01', tags: [] })
+    const c = await saveCard({ name: 'C', birthDate: '2001-03-04', tags: [] })
+    await recordView('pair', [a, b])
+    await recordView('pair', [b, a]) // 順番が違っても同じ行
+    await recordView('team', [c, a, b])
+    await recordView('pair', [a]) // 1人だけは記録しない
+    expect(await db.logs.count()).toBe(2)
+    expect((await db.logs.get(viewLogId('pair', [a, b])))?.memberIds).toEqual([a, b].sort())
+
+    const caseId = await saveCase({
+      title: '立ち上げ', date: '2026-11-15', kind: 'team', memberIds: [a, b, c],
+      scene: '新規案件', reading: '見立て', outcome: '', learning: '', usefulness: 'useful', tags: ['配置'], snapshot: ['仕事 70点'],
+    })
+    const file = await serialize(await buildSnapshot(), 'pass')
+    await db.logs.clear()
+    await db.cases.clear()
+    await applySnapshot(await parse(file, 'pass'))
+    expect(await db.logs.count()).toBe(2)
+    expect((await db.cases.get(caseId))?.snapshot).toEqual(['仕事 70点'])
+
+    // カードを消すと、その人を含むログも消える（ケースは残る）
+    await new Promise((r) => setTimeout(r, 5))
+    await deleteCard(a)
+    expect((await db.logs.toArray()).every((l) => l.deletedAt)).toBe(true)
+    expect((await db.cases.get(caseId))?.deletedAt).toBeUndefined()
+    await deleteViewLog(viewLogId('team', [a, b, c]))
+    await deleteCase(caseId)
+    expect((await db.cases.get(caseId))?.title).toBe('')
+  })
+
+  it('古い版で作ったファイル（ログ・ケースなし）も読める', async () => {
+    const snap = await parse(JSON.stringify({ format: 'fortune-cards-data', cards: [], feedback: [] }))
+    expect(snap?.logs).toEqual([])
+    expect(snap?.cases).toEqual([])
+    const bad = await parse(
+      JSON.stringify({
+        format: 'fortune-cards-data', cards: [], feedback: [],
+        logs: [{ id: 'x', kind: 'pair', memberIds: ['only-one'], updatedAt: 1 }, { id: 'y', kind: 'other', memberIds: ['a', 'b'], updatedAt: 1 }],
+        cases: [{ id: 'z', title: 't', kind: 'team', updatedAt: 1, usefulness: 'great', date: 'bad' }, { id: 'w', kind: 'team', updatedAt: 1 }],
+      }),
+    )
+    expect(bad?.logs).toEqual([])
+    expect(bad?.cases).toHaveLength(1)
+    expect(bad?.cases[0].usefulness).toBeUndefined()
+    expect(bad?.cases[0].date).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 
   it('設定のパスフレーズは同期データに含めない', async () => {

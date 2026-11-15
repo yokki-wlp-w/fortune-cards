@@ -4,6 +4,7 @@ import { NOTICE_REFERENCE } from '../content'
 import { canUseFileHandle, getSyncFileName, syncWithFile } from '../sync/sync'
 import { CardDetail } from './CardDetail'
 import { CardList } from './CardList'
+import { CaseList } from './CaseList'
 import { CompatView } from './CompatView'
 import { SettingsView } from './SettingsView'
 import { StatsView } from './StatsView'
@@ -16,7 +17,7 @@ const TABS = [
   { to: '/compat', label: '相性', icon: '🤝' },
   { to: '/team', label: 'チーム', icon: '👥' },
   { to: '/yearly', label: '年運', icon: '📅' },
-  { to: '/stats', label: '的中率', icon: '📊' },
+  { to: '/stats', label: '記録', icon: '📊' },
   { to: '/settings', label: '設定', icon: '⚙️' },
 ]
 const idList = (v: string | null): string[] => (v ? v.split(',').filter(Boolean) : [])
@@ -53,7 +54,7 @@ function SyncButton() {
 
 export function App() {
   const { path, params } = useHashRoute()
-  const active = path.startsWith('/card/') ? '/' : path
+  const active = path.startsWith('/card/') ? '/' : path === '/cases' ? '/stats' : path
 
   let page
   if (path.startsWith('/card/')) page = <CardDetail key={path} id={decodeURIComponent(path.slice(6))} />
@@ -70,6 +71,7 @@ export function App() {
       />
     )
   } else if (path === '/stats') page = <StatsView />
+  else if (path === '/cases') page = <CaseList />
   else if (path === '/settings') page = <SettingsView />
   else page = <CardList />
 

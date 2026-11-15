@@ -291,9 +291,10 @@ function BackupPanel() {
       const cards = (await db.cards.toArray()).filter((c) => !c.deletedAt).sort((a, b) => a.createdAt - b.createdAt)
       if (cards.length === 0) return setMessage({ ok: false, text: '出力するカードがありません' })
       const stamp = new Date().toISOString().slice(0, 10)
-      await shareOrDownload(await buildExcelFile(cards, `fortune-cards-${stamp}.xlsx`))
+      const cases = (await db.cases.toArray()).filter((c) => !c.deletedAt).sort((a, b) => a.date.localeCompare(b.date))
+      await shareOrDownload(await buildExcelFile(cards, cases, `fortune-cards-${stamp}.xlsx`))
       const pairs = (cards.length * (cards.length - 1)) / 2
-      setMessage({ ok: true, text: `Excel ファイルを出力しました（カード ${cards.length}枚、相性 ${pairs}組）。名前と生年月日が含まれるので、取り扱いにご注意ください。` })
+      setMessage({ ok: true, text: `Excel ファイルを出力しました（カード ${cards.length}枚、相性 ${pairs}組、ケース ${cases.length}件）。名前と生年月日が含まれるので、取り扱いにご注意ください。` })
     } catch (err) {
       const text = errorText(err)
       if (text) setMessage({ ok: false, text })
@@ -311,7 +312,7 @@ function BackupPanel() {
         <Button onClick={() => input.current?.click()}>インポート</Button>
       </div>
       <p className="mt-4 text-sm leading-relaxed text-slate-700">
-        カード一覧と、全員の組み合わせの相性結果を Excel ファイル（.xlsx）に出力します。
+        カード一覧、全員の組み合わせの相性結果、ケース一覧を Excel ファイル（.xlsx）に出力します。
       </p>
       <div className="mt-2">
         <Button onClick={exportExcel}>Excel に出力</Button>
