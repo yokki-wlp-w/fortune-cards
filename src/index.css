@@ -1,0 +1,17 @@
+@import 'tailwindcss';
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  background: #f1f5f9;
+  color: #0f172a;
+  font-family: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', 'Meiryo', system-ui, sans-serif;
+  overscroll-behavior-y: none;
+}
+/* iPhone で入力欄をタップしたときに画面が拡大しないよう 16px 以上にする */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
