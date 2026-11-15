@@ -13,10 +13,12 @@ import {
   getSyncFileName,
   importFile,
   markSynced,
+  overwriteSyncFile,
   shareOrDownload,
   syncWithFile,
   type SyncStats,
 } from '../sync/sync'
+import { normalizePassphrase, passphraseCode } from '../sync/crypto'
 import { Button, Notice, Panel, formatDateTime } from './common'
 import { useMeta } from './hooks'
 
@@ -39,15 +41,21 @@ function Result({ message }: { message: Message }) {
 
 function PassphrasePanel() {
   const saved = useMeta<string>(META_PASSPHRASE)
+  const code = useLiveQuery(async () => (saved ? passphraseCode(saved) : ''), [saved])
   const [value, setValue] = useState('')
-  const [show, setShow] = useState(false)
+  // 打ち間違いに気づけるよう、入力中の文字は最初から見える状態にする
+  const [show, setShow] = useState(true)
   const [message, setMessage] = useState<Message>(null)
 
   const save = async () => {
-    if (value.length < 8) return setMessage({ ok: false, text: '8文字以上で入力してください' })
-    await setMeta(META_PASSPHRASE, value)
+    const normalized = normalizePassphrase(value)
+    if (normalized.length < 8) return setMessage({ ok: false, text: '8文字以上で入力してください' })
+    await setMeta(META_PASSPHRASE, normalized)
     setValue('')
-    setMessage({ ok: true, text: 'この端末にパスフレーズを保存しました。次の同期から、同期ファイルが暗号化されます。' })
+    setMessage({
+      ok: true,
+      text: `この端末にパスフレーズを保存しました（照合コード ${await passphraseCode(normalized)}）。もう一方の端末でも同じ照合コードになっていれば、同じ言葉です。`,
+    })
   }
   const clear = async () => {
     if (!window.confirm('この端末のパスフレーズを消します。次の同期から、同期ファイルは暗号化されなくなります。よろしいですか？')) return
@@ -63,12 +71,24 @@ function PassphrasePanel() {
       <p className="mt-2 text-sm font-semibold">
         現在の状態：{saved ? <span className="text-emerald-700">設定済み（暗号化して同期します）</span> : <span className="text-amber-700">未設定（暗号化しません）</span>}
       </p>
+      {saved && code && (
+        <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">
+          照合コード：<span className="font-mono text-lg font-black tracking-widest text-slate-900">{code}</span>
+          <br />
+          <span className="text-xs text-slate-500">
+            同じ言葉を保存した端末では、同じコードが表示されます。コードが違う場合は、どちらかの言葉が違っています。
+          </span>
+        </p>
+      )}
       <div className="mt-3 flex gap-2">
         <input
           type={show ? 'text' : 'password'}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           autoComplete="off"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
           placeholder={saved ? '新しいパスフレーズに変更' : 'パスフレーズ（8文字以上）'}
           aria-label="パスフレーズ"
           className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2"
@@ -149,6 +169,28 @@ function HandleSync() {
         </Button>
       </div>
       <Result message={message} />
+      {fileName && (
+        <details className="mt-3 rounded-xl bg-slate-50 p-3">
+          <summary className="cursor-pointer text-sm font-bold text-slate-700">うまく同期できないとき</summary>
+          <p className="mt-2 text-sm leading-relaxed text-slate-700">
+            パスフレーズが分からなくなり同期ファイルを開けない場合は、<strong>データが入っている端末</strong>で下のボタンを押すと、同期ファイルをこの端末のデータと今のパスフレーズで作り直せます。
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-slate-500">
+            同期ファイルの中身は読まずに置き換えます。他の端末で追加してまだこの端末に取り込んでいないデータがある場合、それは同期ファイルから消えます（その端末の中には残ります）。
+          </p>
+          <Button
+            variant="danger"
+            className="mt-2"
+            disabled={busy}
+            onClick={() => {
+              if (!window.confirm('同期ファイルを、この端末のデータと現在のパスフレーズで作り直します。同期ファイルの今の中身は置き換えられます。よろしいですか？')) return
+              void run(async () => `同期ファイルを作り直しました（カード ${await overwriteSyncFile()}枚）。もう一方の端末で、同じパスフレーズを保存してから同期してください。`)
+            }}
+          >
+            この端末のデータで同期ファイルを作り直す
+          </Button>
+        </details>
+      )}
     </>
   )
 }

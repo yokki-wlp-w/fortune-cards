@@ -171,8 +171,7 @@ export async function chooseSyncFile(create: boolean): Promise<string> {
   return handle.name
 }
 
-/** ボタン1回の同期（PC）：読む → 統合 → 書き戻す */
-export async function syncWithFile(): Promise<SyncStats> {
+async function openSyncHandle(): Promise<FileHandle> {
   const handle = await getMeta<FileHandle>(META_SYNC_HANDLE)
   if (!handle) throw new Error('同期ファイルがまだ選ばれていません')
   if ((await handle.queryPermission({ mode: 'readwrite' })) !== 'granted') {
@@ -180,6 +179,28 @@ export async function syncWithFile(): Promise<SyncStats> {
       throw new Error('同期ファイルへのアクセスが許可されませんでした')
     }
   }
+  return handle
+}
+
+/**
+ * 同期ファイルを読まずに、この端末のデータだけで書き直す。
+ * パスフレーズが分からなくなって同期ファイルを開けないときの復旧用。
+ * 同期ファイルにしかなかったデータは失われる。
+ */
+export async function overwriteSyncFile(): Promise<number> {
+  const handle = await openSyncHandle()
+  const passphrase = await getMeta<string>(META_PASSPHRASE)
+  const snapshot = await buildSnapshot()
+  const writable = await handle.createWritable()
+  await writable.write(await serialize(snapshot, passphrase))
+  await writable.close()
+  await setMeta(META_LAST_SYNC, Date.now())
+  return snapshot.cards.filter((c) => !c.deletedAt).length
+}
+
+/** ボタン1回の同期（PC）：読む → 統合 → 書き戻す */
+export async function syncWithFile(): Promise<SyncStats> {
+  const handle = await openSyncHandle()
   const passphrase = await getMeta<string>(META_PASSPHRASE)
   const text = await (await handle.getFile()).text()
   const stats = await applySnapshot(await parse(text, passphrase))

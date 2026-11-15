@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db, deleteCard, saveCard, setFeedback, setMeta } from '../db/db'
 import { mergeRecords } from './merge'
-import { decryptEnvelope, encryptText, isEncrypted, WrongPassphraseError } from './crypto'
+import { decryptEnvelope, encryptText, isEncrypted, normalizePassphrase, passphraseCode, WrongPassphraseError } from './crypto'
 import { applySnapshot, buildSnapshot, META_PASSPHRASE, parse, PassphraseRequiredError, serialize } from './sync'
 
 describe('mergeRecords', () => {
@@ -36,6 +36,14 @@ describe('暗号化', () => {
     expect(isEncrypted(env)).toBe(true)
     expect(text).not.toContain('こんにちは')
     expect(await decryptEnvelope(env, 'あいことば')).toBe('こんにちは {"a":1}')
+  })
+  it('照合コードは同じ言葉なら同じ、違えば変わる', async () => {
+    expect(await passphraseCode('あいことば1234')).toBe(await passphraseCode('あいことば1234'))
+    expect(await passphraseCode('あいことば1234')).not.toBe(await passphraseCode('あいことば1235'))
+    expect(await passphraseCode('abc')).toMatch(/^[0-9A-F]{4}$/)
+  })
+  it('前後の空白や全角英数の違いはそろえる', () => {
+    expect(normalizePassphrase('  ａｂｃ１２３４５ ')).toBe('abc12345')
   })
   it('違うパスフレーズでは開けない', async () => {
     const env = JSON.parse(await encryptText('secret', 'right'))

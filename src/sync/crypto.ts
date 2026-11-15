@@ -37,6 +37,18 @@ async function deriveKey(passphrase: string, salt: Uint8Array<ArrayBuffer>): Pro
   )
 }
 
+/** 入力ゆれ（前後の空白、全角・半角の違いなど）で不一致にならないよう、保存前にそろえる */
+export const normalizePassphrase = (raw: string): string => raw.normalize('NFKC').trim()
+
+/**
+ * パスフレーズの照合コード（4文字）。2台の端末で同じ言葉が保存されているかを、
+ * 言葉そのものを見せずに見比べるためのもの。
+ */
+export async function passphraseCode(passphrase: string): Promise<string> {
+  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`fortune-cards:${passphrase}`))
+  return [...new Uint8Array(hash).subarray(0, 2)].map((b) => b.toString(16).padStart(2, '0')).join('').toUpperCase()
+}
+
 export async function encryptText(plain: string, passphrase: string): Promise<string> {
   const salt = crypto.getRandomValues(new Uint8Array(16))
   const iv = crypto.getRandomValues(new Uint8Array(12))
@@ -52,7 +64,9 @@ export function isEncrypted(parsed: unknown): parsed is Envelope {
 
 export class WrongPassphraseError extends Error {
   constructor() {
-    super('パスフレーズが違うか、ファイルが壊れています')
+    super(
+      '同期ファイルを開けませんでした。この端末のパスフレーズが、同期ファイルを暗号化したときの言葉と違います。下の「パスフレーズ」欄の照合コードを、もう一方の端末と見比べてください。直らないときは「うまく同期できないとき」から同期ファイルを作り直せます。（端末内のデータと同期ファイルは変更していません）',
+    )
   }
 }
 
