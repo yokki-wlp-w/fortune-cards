@@ -2,7 +2,8 @@ import { useRef, useState, type ChangeEvent } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ENGINE_VERSION } from '../engine'
 import { NOTICE_ANIMAL, NOTICE_CONSENT, NOTICE_REFERENCE } from '../content'
-import { deleteMeta, setMeta } from '../db/db'
+import { db, deleteMeta, setMeta } from '../db/db'
+import { buildExcelFile } from '../export/excel'
 import {
   META_LAST_SYNC,
   META_PASSPHRASE,
@@ -285,8 +286,22 @@ function BackupPanel() {
     }
   }
 
+  const exportExcel = async () => {
+    try {
+      const cards = (await db.cards.toArray()).filter((c) => !c.deletedAt).sort((a, b) => a.createdAt - b.createdAt)
+      if (cards.length === 0) return setMessage({ ok: false, text: '出力するカードがありません' })
+      const stamp = new Date().toISOString().slice(0, 10)
+      await shareOrDownload(await buildExcelFile(cards, `fortune-cards-${stamp}.xlsx`))
+      const pairs = (cards.length * (cards.length - 1)) / 2
+      setMessage({ ok: true, text: `Excel ファイルを出力しました（カード ${cards.length}枚、相性 ${pairs}組）。名前と生年月日が含まれるので、取り扱いにご注意ください。` })
+    } catch (err) {
+      const text = errorText(err)
+      if (text) setMessage({ ok: false, text })
+    }
+  }
+
   return (
-    <Panel title="バックアップ（JSON）">
+    <Panel title="バックアップと Excel 出力">
       <p className="text-sm leading-relaxed text-slate-700">
         全データを JSON ファイルに書き出します。インポートは、今あるデータに<strong>統合</strong>されます（同じカードは新しい方を採用し、上書きで消えることはありません）。
       </p>
@@ -294,6 +309,12 @@ function BackupPanel() {
       <div className="mt-3 flex flex-wrap gap-2">
         <Button onClick={exportJson}>エクスポート</Button>
         <Button onClick={() => input.current?.click()}>インポート</Button>
+      </div>
+      <p className="mt-4 text-sm leading-relaxed text-slate-700">
+        カード一覧と、全員の組み合わせの相性結果を Excel ファイル（.xlsx）に出力します。
+      </p>
+      <div className="mt-2">
+        <Button onClick={exportExcel}>Excel に出力</Button>
       </div>
       <Result message={message} />
     </Panel>

@@ -6,6 +6,13 @@ import {
   branchRelation,
   computeChart,
   computeCompat,
+  computeTeam,
+  computeYear,
+  computeYears,
+  palaceOf,
+  yearPillar,
+  PALACES,
+  ROLE_GROUPS,
   getsumeiStar,
   honmeiStar,
   isKango,
@@ -226,6 +233,72 @@ describe('数秘術', () => {
     expect(lifePathNumber(1960, 1, 5)).toBe(22) // 1+9+6+0+0+1+0+5 = 22
     expect(lifePathNumber(1989, 12, 3)).toBe(33) // 1+9+8+9+1+2+0+3 = 33
     expect(lifePathNumber(1982, 11, 9)).toBe(4) // 31 → 4（途中でマスターナンバーにならない）
+  })
+})
+
+describe('年運', () => {
+  it('流年の干支', () => {
+    expect(yearPillar(2024).label).toBe('甲辰')
+    expect(yearPillar(2026).label).toBe('丙午')
+    expect(yearPillar(1984).label).toBe('甲子')
+  })
+  it('九星の年盤での回座位置', () => {
+    // 五黄が中宮の年（定位盤）：六白=乾、七赤=兌、八白=艮、九紫=離、一白=坎、二黒=坤、三碧=震、四緑=巽
+    const y = 2022 // 五黄土星の年
+    expect(honmeiStar(y)).toBe(5)
+    expect([5, 6, 7, 8, 9, 1, 2, 3, 4].map((h) => palaceOf(h, y))).toEqual([...PALACES])
+    // 2026年は一白水星が中宮
+    expect(honmeiStar(2026)).toBe(1)
+    expect(palaceOf(1, 2026)).toBe('中宮')
+    expect(palaceOf(2, 2026)).toBe('乾宮')
+    expect(palaceOf(9, 2026)).toBe('巽宮')
+  })
+  it('通変星・十二運・冲・空亡を拾う', () => {
+    // 2024-01-01 生まれ：癸卯・甲子・甲子、空亡は戌亥
+    const c = computeChart('2024-01-01')
+    const y2026 = computeYear(c, 2026) // 丙午：甲から丙=食神、午=死、子と午は冲
+    expect(y2026.tsuhensei).toBe('食神')
+    expect(y2026.juniun).toBe('死')
+    expect(y2026.relations.filter((r) => r.relation === 'chu').map((r) => r.position)).toEqual(['day', 'month'])
+    expect(y2026.kuubou).toBe(false)
+    expect(computeYear(c, 2030).kuubou).toBe(true) // 庚戌
+    expect(computeYear(c, 2029).kango).toBe(true) // 己酉：甲己の干合
+  })
+  it('複数年を連続で返し、段階は3種類のいずれか', () => {
+    const ys = computeYears(computeChart('1990-05-15'), 2026, 10)
+    expect(ys.map((y) => y.year)).toEqual([2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033, 2034, 2035])
+    for (const y of ys) expect(['active', 'steady', 'careful']).toContain(y.level)
+  })
+})
+
+describe('チーム分析', () => {
+  const dates = ['1985-04-12', '1990-11-03', '1978-09-29', '2001-03-04']
+  const team = computeTeam(dates.map((d) => computeChart(d)))
+  it('相性マトリクスは対称で、対角は空', () => {
+    expect(team.size).toBe(4)
+    expect(team.pairs).toHaveLength(6)
+    for (let i = 0; i < 4; i++) {
+      expect(team.matrix[i][i]).toBeNull()
+      for (let j = 0; j < 4; j++) expect(team.matrix[i][j]).toEqual(team.matrix[j][i])
+    }
+    expect(team.bestPair.work).toBe(Math.max(...team.pairs.map((p) => p.work)))
+  })
+  it('五行の平均は合計6、役割は全員がどこかに入る', () => {
+    const sum = Object.values(team.elements).reduce((a, b) => a + b, 0)
+    expect(Math.abs(sum - 6)).toBeLessThan(0.3)
+    expect(ROLE_GROUPS.flatMap((r) => team.roles[r]).sort()).toEqual([0, 1, 2, 3])
+    expect(team.missingRoles.every((r) => team.roles[r].length === 0)).toBe(true)
+  })
+  it('間に入る人は、注意が必要な2人以外から選ぶ', () => {
+    if (team.cautionPair) {
+      expect([team.cautionPair.a, team.cautionPair.b]).not.toContain(team.mediator)
+      expect(team.cautionPair.work).toBeLessThan(55)
+    } else {
+      expect(team.mediator).toBeUndefined()
+    }
+  })
+  it('2人以下はエラー', () => {
+    expect(() => computeTeam(dates.slice(0, 2).map((d) => computeChart(d)))).toThrow()
   })
 })
 

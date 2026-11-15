@@ -228,7 +228,8 @@ export async function buildExportFile(fileName: string, encrypt: boolean): Promi
 
 /** 共有シート（iPhone の「ファイルに保存」など）で渡す。使えなければダウンロードする */
 export async function shareOrDownload(file: File): Promise<'shared' | 'downloaded'> {
-  if (navigator.canShare?.({ files: [file] })) {
+  // PC（ファイルを直接扱えるブラウザ）では共有画面を出さず、そのままダウンロードする
+  if (!canUseFileHandle() && navigator.canShare?.({ files: [file] })) {
     await navigator.share({ files: [file] })
     return 'shared'
   }

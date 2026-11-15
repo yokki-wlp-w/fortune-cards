@@ -42,6 +42,33 @@ export const FACTOR_POINTS: Record<string, { work: number; private: number }> = 
   'kyusei.ctrl': { work: -14, private: -14 },
 }
 
+// ---------- チーム分析 ----------
+
+/** チームの五行（1人あたりの平均。偏りがなければ各 1.2）で「不足」「多い」とみなす境目 */
+export const TEAM_ELEMENT_LACK = 0.7
+export const TEAM_ELEMENT_RICH = 1.8
+/** この点数を下回る組み合わせは、間に入る人を提案する */
+export const TEAM_CAUTION_SCORE = 55
+
+// ---------- 年運 ----------
+
+/** 年ごとの「勢い」の配点。合計が ACTIVE 以上なら動きやすい年、CAREFUL 以下なら整える年 */
+export const YEAR_POINTS = {
+  juniun: {
+    長生: 1, 沐浴: 0, 冠帯: 1, 建禄: 2, 帝旺: 2, 衰: 0, 病: -1, 死: -1, 墓: -1, 絶: -2, 胎: 0, 養: 1,
+  } as Record<string, number>,
+  /** 流年の地支と命式の地支の関係（柱の重み POSITION_WEIGHTS を掛ける） */
+  relation: { same: 0, rikugo: 1.5, sango: 1.5, chu: -2, kei: -1, gai: -1 } as Record<string, number>,
+  kango: 1,
+  kuubou: -1.5,
+  /** 九星の年盤で本命星が回座する宮 */
+  palace: {
+    中宮: 0, 乾宮: 1.5, 兌宮: 1.5, 艮宮: -0.5, 離宮: 0.5, 坎宮: -2, 坤宮: -0.5, 震宮: 1.5, 巽宮: 2,
+  } as Record<string, number>,
+}
+export const YEAR_ACTIVE = 2
+export const YEAR_CAREFUL = -2
+
 /** 五行バランスで「不足」「十分」とみなす境目（合計6のうち） */
 export const ELEMENT_LACK = 0.5
 export const ELEMENT_RICH = 1.6

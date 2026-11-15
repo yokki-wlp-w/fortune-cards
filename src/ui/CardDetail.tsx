@@ -172,6 +172,9 @@ export function CardDetail({ id }: { id: string }) {
             <Button variant="primary" className="col-span-2" onClick={() => navigate(`/compat?a=${card.id}`)}>
               相性を見る
             </Button>
+            <Button className="col-span-2" onClick={() => navigate(`/yearly?ids=${card.id}`)}>
+              年運を見る
+            </Button>
             <Button onClick={() => setEditing(true)}>編集</Button>
             <Button variant="danger" onClick={remove}>
               削除

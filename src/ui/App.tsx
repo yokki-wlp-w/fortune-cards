@@ -7,14 +7,19 @@ import { CardList } from './CardList'
 import { CompatView } from './CompatView'
 import { SettingsView } from './SettingsView'
 import { StatsView } from './StatsView'
+import { TeamView } from './TeamView'
+import { YearlyView } from './YearlyView'
 import { navigate, useHashRoute } from './hooks'
 
 const TABS = [
   { to: '/', label: 'カード', icon: '🃏' },
   { to: '/compat', label: '相性', icon: '🤝' },
+  { to: '/team', label: 'チーム', icon: '👥' },
+  { to: '/yearly', label: '年運', icon: '📅' },
   { to: '/stats', label: '的中率', icon: '📊' },
-  { to: '/settings', label: '同期・設定', icon: '⚙️' },
+  { to: '/settings', label: '設定', icon: '⚙️' },
 ]
+const idList = (v: string | null): string[] => (v ? v.split(',').filter(Boolean) : [])
 
 /** ヘッダーの同期ボタン。同期ファイルが決まっている PC では押すだけで同期する */
 function SyncButton() {
@@ -53,7 +58,18 @@ export function App() {
   let page
   if (path.startsWith('/card/')) page = <CardDetail key={path} id={decodeURIComponent(path.slice(6))} />
   else if (path === '/compat') page = <CompatView a={params.get('a') ?? ''} b={params.get('b') ?? ''} />
-  else if (path === '/stats') page = <StatsView />
+  else if (path === '/team') page = <TeamView ids={idList(params.get('ids'))} />
+  else if (path === '/yearly') {
+    const from = Number(params.get('from'))
+    const span = Number(params.get('n'))
+    page = (
+      <YearlyView
+        ids={idList(params.get('ids'))}
+        from={Number.isInteger(from) && from >= 1950 && from <= 2090 ? from : new Date().getFullYear()}
+        span={[5, 10, 15].includes(span) ? span : 10}
+      />
+    )
+  } else if (path === '/stats') page = <StatsView />
   else if (path === '/settings') page = <SettingsView />
   else page = <CardList />
 
@@ -90,7 +106,7 @@ export function App() {
 
       <nav
         aria-label="メニュー"
-        className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] md:hidden"
+        className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-6 border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] md:hidden"
       >
         {TABS.map((t) => (
           <button
